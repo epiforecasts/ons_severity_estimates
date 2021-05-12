@@ -1,20 +1,18 @@
 library("here")
 library("readxl")
 library("rvest")
-library("purrr")
 library("tidyr")
 library("dplyr")
-library("janitor")
-library("socialmixr")
 library("lubridate")
 library("ggplot2")
 library("data.table")
 
-# Read in infection estimates
-infections <- data.table::as.data.table(readRDS("inf.rds"))
 
 
-# Read in latest ONS estimates
+################################
+# Read in latest ONS estimates #
+################################
+
 url <- paste0("https://www.ons.gov.uk/peoplepopulationandcommunity/",
               "healthandsocialcare/conditionsanddiseases/datasets/",
               "coronaviruscovid19infectionsurveydata")
@@ -37,6 +35,7 @@ if (!file.exists(file.path(cis_dir, file_name))) {
                file.path(cis_dir, file_name))
 }
 
+# Read in
 age_region_data_raw <- read_excel(file.path(cis_dir, file_name),
                                   sheet = "1a",
                                   skip = 6)
@@ -59,11 +58,14 @@ ons_eng$geography <- "England"
 # Variable for midpoint of 14 day intervals
 ons_eng[, date := lubridate::ymd(start_date) + 6.5]
 
+# Population data across regions
 ons_pop <- fread(here("ons_data.csv"))
 ons_eng$population_size <- sum(ons_pop$ons_population)
 
-# A function to provide estimates of the detection probability for any continuous value of time since infection
-# Have this data table in your environment
+# A function to provide estimates of the detection probability for any continuous value of time since infection. Uses model from here: 
+# https://bmcmedicine.biomedcentral.com/articles/10.1186/s12916-021-01982-x
+# https://github.com/cmmid/pcr-profile
+
 dt <- data.table::fread(here("fitted_params.csv"))
 
 prob_cont <- function(time_since_inf, q = 0.5) {
@@ -72,10 +74,9 @@ prob_cont <- function(time_since_inf, q = 0.5) {
   return(out)
 }
 
-# A nice speedy way of calculating number of detectable cases from
+# A nice speedy way of calculating cumulative number of detectable cases from
 # a time series of daily infections
 pvec <- vapply(X = 0:(365 * 2), FUN = prob_cont, FUN.VALUE = 1, q = 0.5)
-
 detectable_cases <- function(x) {
   
   out <- rep(0, length(x))
@@ -88,6 +89,10 @@ detectable_cases <- function(x) {
   return(out)
 }
 
+# Read in infection estimates from EpiNow2
+infections <- data.table::as.data.table(readRDS("inf.rds"))
+
+# Calculate cumulative detectable cases for each sample and data source
 infection <- infections[, value_cum := detectable_cases(value), by = c("data_source", "geography", "sample")]
 
 # Select relevant dates and geographies from infection samples and summarise over all samples
