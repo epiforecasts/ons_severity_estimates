@@ -6,6 +6,7 @@ library("dplyr")
 library("lubridate")
 library("ggplot2")
 library("data.table")
+library("purrr")
 
 
 
@@ -105,11 +106,13 @@ ons_eng[, date := lubridate::ymd(date)]
 dt <- merge.data.table(rel_inf, ons_eng, by = c("geography", "date"))
 
 # Calculate prevalence from infection samples
-dt[, inf_median := 100 * inf_median / population_size
-][,inf_lower := 100 * inf_lower / population_size
-][,inf_upper := 100 * inf_upper / population_size]
+dt[, inf_median := inf_median / population_size
+][,inf_lower := inf_lower / population_size
+][,inf_upper := inf_upper / population_size]
 
-dt[, data_source_f := factor(data_source, levels = c("cases", "admissions", "deaths"))]
+dt[, data_source_f := factor(data_source,
+                             levels = c("cases", "admissions", "deaths"),
+                             labels = c("Cases", "Admissions", "Deaths"))]
 
 # Plot IHR / ICR / IFR
 p_out <- dt[date > "2020-10-01"] %>%
@@ -125,7 +128,8 @@ p_out <- dt[date > "2020-10-01"] %>%
       y = "Estimated IFR / IHR / ICR (%)") +
  cowplot::theme_minimal_grid()  +
  scale_x_date(breaks = "1 month", date_labels = "%b %Y") +
- theme(strip.text.x = element_blank())
+  theme(strip.text.x = element_blank()) +
+  expand_limits(y = 0)
 
 ggsave(p_out, filename = "ons_severity.pdf")
  
